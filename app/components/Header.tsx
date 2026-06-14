@@ -26,7 +26,7 @@ const pageTitles: Record<string, string> = {
 export default function Header() {
   const pathname = usePathname();
   const isDashboard = pathname === '/dashboard';
-  const pageTitle = pageTitles[pathname];
+  const pageTitle = pageTitles[pathname] + " "+ "Module";
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   return (
@@ -43,7 +43,7 @@ export default function Header() {
           </>
         ) : (
           <>
-            <h2 className="text-md font-medium text-white">
+            <h2 className="text-xl font-medium text-white">
               {pageTitle}
             </h2>
           </>

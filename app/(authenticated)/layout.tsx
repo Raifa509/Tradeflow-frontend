@@ -25,7 +25,7 @@ export default function DashboardLayout({
                            border-b-2 border-[#1e2a52] ">
                         <Header />
                     </nav>
-                    <div className="p-4">{children}</div>
+                    <div className="p-9">{children}</div>
                 </main>
             </div>
         </>
