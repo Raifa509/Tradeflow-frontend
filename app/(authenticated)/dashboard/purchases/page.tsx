@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Plus, Eye } from 'lucide-react';
+import { Search, Plus, Eye, Minus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -35,11 +35,15 @@ export default function PurchasesPage() {
   const [viewingPurchase, setViewingPurchase] = useState<Purchase | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState('');
+  const [isCancelOpen, setIsCancelOpen] = useState(false);
+
   const [form, setForm] = useState({
     supplier: '',
     company: '',
     notes: '',
-    items: [] as { product: string; quantity: number; price: number }[],
+    items: [{ product: '', quantity: 1, price: 0 }], // Starts with one clean initial line item
     date: new Date(),
   });
   const [error, setError] = useState('');
@@ -62,7 +66,11 @@ export default function PurchasesPage() {
 
   const handleStatusChange = (id: number, newStatus: string) => {
     setPurchases(prev => prev.map(p => p.id === id ? { ...p, status: newStatus } : p));
+    if (viewingPurchase?.id === id) {
+      setViewingPurchase(v => v ? { ...v, status: newStatus } : null);
+    }
   };
+
   const addItem = () => {
     setForm(prev => ({ ...prev, items: [...prev.items, { product: '', quantity: 1, price: 0 }] }));
   };
@@ -70,7 +78,10 @@ export default function PurchasesPage() {
   const updateItem = (index: number, field: string, value: string | number) => {
     setForm(prev => ({
       ...prev,
-      items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item)
+      items: prev.items.map((item, i) => i === index ? { 
+        ...item, 
+        [field]: field === 'product' ? value : Math.max(0, Number(value)) 
+      } : item)
     }));
   };
 
@@ -78,26 +89,59 @@ export default function PurchasesPage() {
     setForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
   };
 
+  const openCancelModal = () => {
+    setCancelReason('');
+    setCancelError('');
+    setIsCancelOpen(true);
+  };
+
+  const handleCancelConfirm = () => {
+    if (!cancelReason.trim()) {
+      setCancelError('Please enter a reason for cancellation.');
+      return;
+    }
+
+    if (viewingPurchase) {
+      const updatedNotes = `Cancelled: ${cancelReason}${viewingPurchase.notes ? ` | ${viewingPurchase.notes}` : ''}`;
+
+      setPurchases(prev => prev.map(p =>
+        p.id === viewingPurchase.id ? { ...p, status: 'CANCELLED', notes: updatedNotes } : p
+      ));
+      setViewingPurchase(v => v ? { ...v, status: 'CANCELLED', notes: updatedNotes } : null);
+    }
+
+    setIsCancelOpen(false);
+    setIsViewOpen(false);
+  };
+
   const formTotal = form.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+
   const handleAddSubmit = () => {
     if (!form.supplier || !form.company) {
       setError('Supplier and company are required');
       return;
     }
+    
+    const validItems = form.items.filter(i => i.product.trim());
+    if (validItems.length === 0) {
+      setError('Please add at least one item with a valid product name.');
+      return;
+    }
+
     setPurchases(prev => [{
       id: prev.length + 1,
-      refNumber: `PUR-2026-00${prev.length + 1}`,
+      refNumber: `PUR-2026-${String(prev.length + 1).padStart(3, '0')}`,
       supplier: form.supplier,
       company: form.company,
       total: formTotal,
       status: 'PENDING',
       notes: form.notes,
       createdAt: format(form.date, 'yyyy-MM-dd'),
-      items: form.items,
-
+      items: validItems,
     }, ...prev]);
+
     setIsAddOpen(false);
-    setForm({ supplier: '', company: '', notes: '', items: [], date: new Date() });
+    setForm({ supplier: '', company: '', notes: '', items: [{ product: '', quantity: 1, price: 0 }], date: new Date() });
   };
 
   return (
@@ -114,7 +158,11 @@ export default function PurchasesPage() {
           />
         </div>
         <Button
-          onClick={() => setIsAddOpen(true)}
+          onClick={() => {
+            setForm({ supplier: '', company: '', notes: '', items: [{ product: '', quantity: 1, price: 0 }], date: new Date() });
+            setError('');
+            setIsAddOpen(true);
+          }}
           className="bg-blue-800 cursor-pointer hover:bg-blue-800/80 text-white gap-1 py-5 px-3 rounded-xl"
         >
           <Plus size={16} />
@@ -123,7 +171,7 @@ export default function PurchasesPage() {
       </div>
 
       {/* Status Filter */}
-      <div className="flex items-center rounded-xl p-1 mt-6 gap-1">
+      <div className="flex items-center rounded-xl p-1 mt-10 gap-1">
         {(['ALL', 'PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED'] as const).map((status) => (
           <button
             key={status}
@@ -136,13 +184,13 @@ export default function PurchasesPage() {
           >
             {status === 'ALL'
               ? `All (${purchases.length})`
-              : `${status} (${purchases.filter(p => p.status === status).length})`}
+              : `${status.charAt(0) + status.slice(1).toLowerCase()} (${purchases.filter(p => p.status === status).length})`}
           </button>
         ))}
       </div>
 
       {/* Table */}
-      <div className="rounded-xl mt-6 border border-white/10 overflow-hidden px-4">
+      <div className="rounded-xl mt-8 border border-white/10 overflow-hidden px-4">
         <Table>
           <TableHeader>
             <TableRow className="border-white/10 hover:bg-transparent">
@@ -159,7 +207,7 @@ export default function PurchasesPage() {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-400 py-10">
+                <TableCell colSpan={8} className="text-center text-gray-400 py-10">
                   No purchase orders found
                 </TableCell>
               </TableRow>
@@ -180,7 +228,6 @@ export default function PurchasesPage() {
                   <TableCell className="text-gray-300">{purchase.createdAt}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
-
                       {purchase.status === 'PENDING' && (
                         <button
                           onClick={() => handleStatusChange(purchase.id, 'CONFIRMED')}
@@ -189,12 +236,22 @@ export default function PurchasesPage() {
                           Confirm
                         </button>
                       )}
+
                       {purchase.status === 'CONFIRMED' && (
                         <button
                           onClick={() => handleStatusChange(purchase.id, 'DELIVERED')}
                           className="text-xs text-green-400 hover:text-green-300 cursor-pointer border border-green-400/30 px-2 py-1 rounded-lg transition"
                         >
                           Deliver
+                        </button>
+                      )}
+
+                      {(purchase.status === 'PENDING' || purchase.status === 'CONFIRMED') && (
+                        <button
+                          onClick={() => { setViewingPurchase(purchase); openCancelModal(); }}
+                          className="text-xs text-red-400 hover:text-red-300 cursor-pointer border border-red-400/30 px-2 py-1 rounded-lg transition"
+                        >
+                          Cancel
                         </button>
                       )}
                     </div>
@@ -214,16 +271,62 @@ export default function PurchasesPage() {
         </Table>
       </div>
 
-      {/* View Purchase Modal */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-xl px-8 py-6">
+      {/* ── Cancel Purchase Confirmation Modal (Single Global Instance) ── */}
+      <Dialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
+        <DialogContent className="sm:max-w-md px-8 py-6">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">
+            <DialogTitle className="text-xl font-semibold text-black">Cancel Purchase Order</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            {cancelError && (
+              <p className="text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg">
+                {cancelError}
+              </p>
+            )}
+
+            <div className="space-y-2">
+              <Label className="text-gray-700">
+                Reason for cancellation <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g. Supplier stock shortage / incorrect pricing"
+                className="border border-black/20 py-5 text-black"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-1">
+              <Button
+                variant="ghost"
+                onClick={() => setIsCancelOpen(false)}
+                className="cursor-pointer px-5 py-5 text-gray-500 hover:bg-gray-100"
+              >
+                Go Back
+              </Button>
+              <Button
+                onClick={handleCancelConfirm}
+                className="bg-red-600 cursor-pointer px-5 py-5 rounded-xl hover:bg-red-700 text-white"
+              >
+                Confirm Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Purchase Details Modal */}
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent className="sm:max-w-xl h-[80vh] flex flex-col p-0 overflow-hidden bg-white">
+          <DialogHeader className="px-8 py-5 border-b border-black/5 flex-shrink-0">
+            <DialogTitle className="text-xl font-semibold text-black">
               Purchase Details — {viewingPurchase?.refNumber}
             </DialogTitle>
           </DialogHeader>
+
           {viewingPurchase && (
-            <div className="space-y-4 mt-2">
+            <div className="flex-1 overflow-y-auto px-8 py-4 space-y-5">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-gray-400">Supplier</p>
@@ -246,12 +349,11 @@ export default function PurchasesPage() {
                 {viewingPurchase.notes && (
                   <div className="col-span-2">
                     <p className="text-gray-400">Notes</p>
-                    <p className="text-black">{viewingPurchase.notes}</p>
+                    <p className="text-black bg-gray-50 p-2.5 rounded-lg border border-black/5">{viewingPurchase.notes}</p>
                   </div>
                 )}
               </div>
 
-              {/* Items */}
               <div>
                 <p className="text-sm text-gray-400 mb-2">Purchase Items</p>
                 <div className="border border-black/10 rounded-xl overflow-hidden">
@@ -277,14 +379,25 @@ export default function PurchasesPage() {
                   </table>
                 </div>
               </div>
+            </div>
+          )}
 
-              <div className="flex justify-end border-t border-black/10 pt-3">
-                <div className="text-right">
-                  <p className="text-sm text-gray-400">Grand Total</p>
-                  <p className="text-xl font-bold text-black">
-                    AED {viewingPurchase.total.toLocaleString()}
-                  </p>
-                </div>
+          {/* Fixed Footer with View-to-Cancel Actions Linked */}
+          {viewingPurchase && (
+            <div className="flex items-center justify-between border-t border-black/10 px-8 py-4 bg-gray-50/50 flex-shrink-0">
+              {(viewingPurchase.status === 'PENDING' || viewingPurchase.status === 'CONFIRMED') && (
+                <button
+                  onClick={() => openCancelModal()}
+                  className="text-sm text-red-500 hover:text-red-600 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition cursor-pointer"
+                >
+                  Cancel Order
+                </button>
+              )}
+              <div className="text-right ml-auto">
+                <p className="text-sm text-gray-400">Grand Total</p>
+                <p className="text-xl font-bold text-black">
+                  AED {viewingPurchase.total.toLocaleString()}
+                </p>
               </div>
             </div>
           )}
@@ -293,139 +406,157 @@ export default function PurchasesPage() {
 
       {/* Add Purchase Modal */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="sm:max-w-2xl px-8 py-6 max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">New Purchase Order</DialogTitle>
+        <DialogContent className="sm:max-w-2xl h-[87vh] p-0 flex flex-col overflow-hidden bg-white text-black">
+          <DialogHeader className="px-8 py-6 border-b flex-shrink-0">
+            <DialogTitle className="text-xl font-semibold text-black">New Purchase Order</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 mt-2">
+
+          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5">
             {error && (
               <p className="text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg">{error}</p>
             )}
 
-            {/* Supplier Info */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 <Label>Supplier Name <span className="text-red-600">*</span></Label>
                 <Input
                   value={form.supplier}
                   onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                  className="border border-black/20 py-5"
+                  className="border border-black/20 py-5 text-black"
                 />
               </div>
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 <Label>Company <span className="text-red-600">*</span></Label>
                 <Input
                   value={form.company}
                   onChange={(e) => setForm({ ...form, company: e.target.value })}
-                  className="border border-black/20 py-5"
+                  className="border border-black/20 py-5 text-black"
                 />
               </div>
             </div>
 
-            <div className="space-y-2.5">
-              <Label>Notes</Label>
-              <Input
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className="border border-black/20 py-5"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Purchase Date <span className="text-red-600">*</span></Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="w-full flex items-center gap-2 border border-black/20 rounded-lg px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition cursor-pointer text-black bg-white">
+                      <CalendarIcon size={15} className="text-gray-400" />
+                      {form.date ? format(form.date, 'dd MMM yyyy') : 'Pick a date'}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={form.date}
+                      onSelect={(date) => date && setForm({ ...form, date })}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label>Notes</Label>
+                <Input
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  placeholder="Incoming delivery details..."
+                  className="border border-black/20 py-5 text-black"
+                />
+              </div>
             </div>
-            <div className="space-y-2.5">
-              <Label>Purchase Date <span className="text-red-600">*</span></Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="w-full flex items-center gap-2 border border-black/20 rounded-md px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition">
-                    <CalendarIcon size={15} className="text-gray-400" />
-                    {form.date ? format(form.date, 'dd MMM yyyy') : 'Pick a date'}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={form.date}
-                    onSelect={(date) => date && setForm({ ...form, date })}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            {/* Products Section */}
-            <div className="space-y-3">
+
+            <div className="space-y-3 mt-6">
               <div className="flex items-center justify-between">
                 <Label>Purchase Items</Label>
                 <button
                   onClick={addItem}
-                  className="text-xs text-blue-400 hover:text-blue-300 border border-blue-400/30 px-3 py-1.5 rounded-lg transition flex items-center gap-1"
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 cursor-pointer"
                 >
-                  <Plus size={12} /> Add Item
+                  <Plus size={13} /> Add Line
                 </button>
               </div>
 
               {form.items.length === 0 ? (
-                <div className="text-center py-6 border border-dashed border-black/20 rounded-xl text-gray-400 text-sm">
-                  No items added yet. Click "Add Item" to start.
+                <div className="text-center py-10 border border-dashed border-black/20 rounded-xl text-gray-400 text-sm">
+                  No items added yet. Click "Add Line" to start.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {/* Header */}
-                  <div className="grid grid-cols-12 gap-2 px-1 text-xs text-gray-400 font-medium">
-                    <span className="col-span-5">Product</span>
-                    <span className="col-span-2">Qty</span>
-                    <span className="col-span-3">Price (AED)</span>
-                    <span className="col-span-1 text-right">Total</span>
-                    <span className="col-span-1" />
+                  <div className="grid grid-cols-[1fr_80px_100px_90px_32px] gap-2 text-xs text-gray-400 px-1">
+                    <span>Product</span>
+                    <span>Qty</span>
+                    <span>Price (AED)</span>
+                    <span className="text-right">Total</span>
+                    <span />
                   </div>
 
-                  {form.items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                      <Input
-                        placeholder="Product name"
-                        value={item.product}
-                        onChange={(e) => updateItem(index, 'product', e.target.value)}
-                        className="col-span-5 border border-black/20 py-4 text-sm"
-                      />
-                      <Input
-                        type="number"
-                        min={1}
-                        value={item.quantity}
-                        onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                        className="col-span-2 border border-black/20 py-4 text-sm"
-                      />
-                      <Input
-                        type="number"
-                        min={0}
-                        value={item.price}
-                        onChange={(e) => updateItem(index, 'price', Number(e.target.value))}
-                        className="col-span-3 border border-black/20 py-4 text-sm"
-                      />
-                      <span className="col-span-1 text-xs text-gray-500 text-right">
-                        {(item.quantity * item.price).toLocaleString()}
-                      </span>
-                      <button
-                        onClick={() => removeItem(index)}
-                        className="col-span-1 text-red-400 hover:text-red-300 text-center transition"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
+                  <div className="space-y-2">
+                    {form.items.map((item, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_80px_100px_90px_32px] gap-2 items-center">
+                        <Input
+                          value={item.product}
+                          onChange={(e) => updateItem(idx, "product", e.target.value)}
+                          placeholder="Product name"
+                          className="border border-black/20 py-4 text-sm text-black"
+                        />
 
-                  {/* Grand Total */}
-                  <div className="flex justify-end pt-2 border-t border-black/10">
-                    <p className="text-sm font-semibold text-black">
-                      Total: AED {formTotal.toLocaleString()}
-                    </p>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(e) => updateItem(idx, "quantity", e.target.value)}
+                          className="border border-black/20 py-4 text-sm text-center text-black"
+                        />
+
+                        <Input
+                          type="number"
+                          min={0}
+                          value={item.price}
+                          onChange={(e) => updateItem(idx, "price", e.target.value)}
+                          className="border border-black/20 py-4 text-sm text-black"
+                        />
+
+                        <p className="text-sm text-right text-gray-600 font-medium pr-1">
+                          {(item.quantity * item.price).toLocaleString()}
+                        </p>
+
+                        <button
+                          onClick={() => removeItem(idx)}
+                          disabled={form.items.length === 1}
+                          className="text-red-500 ps-3 hover:text-red-400 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          <Minus size={20} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
+          </div>
 
-            <div className="flex justify-end gap-4 mt-4 mb-2">
-              <Button variant="ghost" onClick={() => setIsAddOpen(false)} className="cursor-pointer px-5 py-5">
+          <div className="border-t bg-white px-8 py-4 flex-shrink-0">
+            <div className="flex justify-between items-center">
+              <p className="text-lg font-semibold text-black">Order Total</p>
+              <p className="text-lg font-semibold text-black">
+                AED {formTotal.toLocaleString()}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-5">
+              <Button
+                variant="ghost"
+                onClick={() => setIsAddOpen(false)}
+                className="cursor-pointer px-5 py-5 text-gray-500"
+              >
                 Cancel
               </Button>
-              <Button onClick={handleAddSubmit} className="bg-blue-600 cursor-pointer px-5 py-5 rounded-xl hover:bg-blue-700 text-white">
-                Create Purchase
+
+              <Button
+                onClick={handleAddSubmit}
+                className="bg-blue-600 cursor-pointer px-5 py-5 rounded-xl hover:bg-blue-700 text-white"
+              >
+                Create Order
               </Button>
             </div>
           </div>

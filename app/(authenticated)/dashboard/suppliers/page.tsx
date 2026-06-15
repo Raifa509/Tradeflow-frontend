@@ -137,7 +137,7 @@ export default function SuppliersPage() {
         ))}
       </div>
       {/* Table */}
-      <div className="rounded-xl mt-6 border border-white/10 overflow-hidden px-4">
+      <div className="rounded-xl mt-8 border border-white/10 overflow-hidden px-4">
         <Table>
           <TableHeader>
             <TableRow className="border-white/10 hover:bg-transparent">

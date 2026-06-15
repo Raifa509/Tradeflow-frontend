@@ -10,6 +10,7 @@ import {
   FileText,
   BarChart3,
   LogOut,
+  BookUser,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { usePathname } from 'next/navigation';
@@ -20,6 +21,7 @@ const navLinks = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Inventory', href: '/dashboard/inventory', icon: Package },
   { label: 'Customers', href: '/dashboard/customers', icon: Users },
+  { label: 'Users', href: '/dashboard/users', icon: BookUser },
   { label: 'Suppliers', href: '/dashboard/suppliers', icon: Truck },
   { label: 'Sales Orders', href: '/dashboard/sales', icon: ShoppingCart },
   { label: 'Purchase Orders', href: '/dashboard/purchases', icon: PackageSearch },
@@ -68,13 +70,13 @@ function Sidebar() {
         }
       </nav>
       <Separator className="bg-[#1e2a52] my-5" />
-        <button
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium cursor-pointer text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all w-full"
-        >
-          <LogOut size={18} />
-          Logout
-        </button>
-    
+      <button
+        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium cursor-pointer text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all w-full"
+      >
+        <LogOut size={18} />
+        Logout
+      </button>
+
     </div>
   )
 }

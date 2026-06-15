@@ -129,7 +129,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-6 mt-6">
+      <div className="flex items-center gap-2 mt-6">
         {/* Category Filter */}
         <div className="flex items-center rounded-xl p-1">
           {(['ALL', 'Electronics', 'Appliances'] as const).map((cat) => (
@@ -196,8 +196,8 @@ export default function InventoryPage() {
                       {product.category}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-gray-300">
-                    AED {product.price.toLocaleString()}
+                  <TableCell className="text-gray-300 pl-6">
+                    {product.price.toLocaleString()}
                   </TableCell>
                   <TableCell  >
                     <Badge className={product.quantity < 10
@@ -207,7 +207,7 @@ export default function InventoryPage() {
                       {product.quantity < 10 ? ` ${product.quantity}` : product.quantity}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="ps-6">
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => openEditModal(product)}
@@ -215,12 +215,7 @@ export default function InventoryPage() {
                       >
                         <Pencil size={15} />
                       </button>
-                      <button
-                        onClick={() => handleDelete(product.id)}
-                        className="text-red-400 cursor-pointer hover:text-red-300 transition"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+            
                     </div>
                   </TableCell>
                 </TableRow>
@@ -281,7 +276,6 @@ export default function InventoryPage() {
                   type="number"
                   value={form.price}
                   onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  placeholder="1899"
                   className="border border-black/20 py-5"
                 />
               </div>
@@ -291,12 +285,12 @@ export default function InventoryPage() {
                   type="number"
                   value={form.quantity}
                   onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                  placeholder="25"
+                  min={0}
                   className="border border-black/20 py-5"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-4 mt-4 mb-2">
+            <div className="flex justify-end gap-4 mt-10 mb-2">
               <Button
                 variant="ghost"
                 onClick={() => setIsModalOpen(false)}

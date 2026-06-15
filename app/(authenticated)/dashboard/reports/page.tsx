@@ -106,7 +106,7 @@ export default function ReportsPage() {
                   : 'text-gray-400 hover:text-white'
                 }`}
             >
-              {tab === 'SALES' ? '📊 Sales Report' : '📦 Inventory Report'}
+              {tab === 'SALES' ? 'Sales Report' : 'Inventory Report'}
             </button>
           ))}
         </div>
@@ -142,13 +142,13 @@ export default function ReportsPage() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="bg-white/5 border-white/10 text-white w-44"
+                className="bg-white/5  border-white/10 text-white w-44"
               />
             </div>
             {(startDate || endDate) && (
               <button
                 onClick={() => { setStartDate(''); setEndDate(''); }}
-                className="text-sm text-gray-400 hover:text-white transition"
+                className="text-sm cursor-pointer text-gray-400 hover:text-white transition"
               >
                 Clear
               </button>
@@ -319,7 +319,7 @@ export default function ReportsPage() {
                         ? 'bg-red-500/20 text-red-400 border-0'
                         : 'bg-green-500/20 text-green-400 border-0'
                       }>
-                        {product.quantity < 10 ? `⚠️ ${product.quantity}` : product.quantity}
+                        {product.quantity < 10 ? ` ${product.quantity}` : product.quantity}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-gray-300">
