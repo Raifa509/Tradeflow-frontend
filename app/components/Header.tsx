@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Bell, LogOut, User, ChevronDown } from 'lucide-react';
+import { Bell, LogOut, ChevronDown, User } from 'lucide-react';
 import ProfileModal from './ProfileModal';
+import { getStoredUser, logout, UserType } from '@/lib/services/authService';
+
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -22,26 +24,34 @@ const pageTitles: Record<string, string> = {
   '/dashboard/purchases': 'Purchase Orders',
   '/dashboard/invoices': 'Invoices',
   '/dashboard/reports': 'Reports',
+  '/dashboard/users':'Users'
 };
 
 export default function Header() {
   const pathname = usePathname();
+  const router = useRouter()
   const isDashboard = pathname === '/dashboard';
   const pageTitle = pageTitles[pathname] + " " + "Module";
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [userDetails, setUserDetails] = useState<UserType | null>(() => getStoredUser());
+
+  useEffect(() => {
+    if (!userDetails) {
+      router.push('/')
+    }
+  }, [])
   return (
-   <>
+    <>
       <div className="flex items-center justify-between px-8 py-4">
-  
+
         {/* Left */}
         <div>
           {isDashboard ? (
             <>
               <h2 className="text-xl font-medium text-white">
-                {getGreeting()} , Raifa !
+                {getGreeting()} , {userDetails?.name}
               </h2>
-  
+
             </>
           ) : (
             <>
@@ -51,7 +61,7 @@ export default function Header() {
             </>
           )}
         </div>
-  
+
         {/* Right */}
         <div className="flex items-center gap-4">
           {/* User Dropdown */}
@@ -62,38 +72,25 @@ export default function Header() {
             >
               <Avatar className="w-9.5 h-9.5">
                 <AvatarFallback className="bg-white/10  text-blue-800/90 font-semibold text-md">
-                  RA
+                  {userDetails?.name?.charAt(0)}
                 </AvatarFallback>
               </Avatar>
               <div className="text-left">
-                <p className="text-sm font-medium tracking-wider text-white">Raifa NP</p>
-                <p className="text-xs tracking-wider text-white/80">Admin</p>
+                <p className="text-sm font-medium tracking-wider text-white">{userDetails?.name}</p>
+                <p className="text-xs tracking-wider text-white/80">{
+                  userDetails?.role === 'ADMIN' ? 'Admin' : 'Staff'
+                }</p>
               </div>
-              <ChevronDown size={17} className="text-gray-400" />
+
             </button>
-  
-            {/* Dropdown Menu */}
-            {dropdownOpen && (
-              <div className="absolute right-5 top-14 w-50 bg-[#0d1b3e] border border-[#1e2a52] rounded-lg shadow-lg z-50 py-1">
-                <div className="px-3 py-2 text-xs text-white/70 border-b border-[#1e2a52]">
-                  My Account
-                </div>
-                <button onClick={() => { setProfileOpen(true); setDropdownOpen(false); }} className="flex cursor-pointer items-center gap-2 w-full px-3 py-2.5 text-sm text-white hover:bg-white/10 transition">
-                  <User size={14} />
-                  Profile
-                </button>
-                <button className="flex cursor-pointer items-center gap-2 w-full px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition">
-                  <LogOut size={14} />
-                  Logout
-                </button>
-              </div>
-            )}
+
+
           </div>
-  
+
         </div>
-       
+
       </div>
-       <ProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
-   </>
+
+    </>
   );
 }

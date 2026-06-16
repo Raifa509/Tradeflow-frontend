@@ -1,6 +1,9 @@
-
+'use client'
+import { isAuthenticated } from "@/lib/services/authService";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
+import { redirect, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function DashboardLayout({
     children,
@@ -8,6 +11,19 @@ export default function DashboardLayout({
     children: React.ReactNode;
 
 }) {
+    const router = useRouter()
+    const [checked, setChecked] = useState(false)
+
+    useEffect
+    (() => {
+        if (!isAuthenticated()) {
+            router.replace('/')
+        } else {
+            setChecked(true)
+        }
+    }, [])
+
+    if (!checked) return null
     return (
         <>
             <div className="flex min-h-screen bg-[#050b1f]">
