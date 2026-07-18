@@ -27,7 +27,7 @@ export default function DashboardLayout({
     return (
         <>
             <div className="flex min-h-screen bg-[#050b1f]">
-                <aside className="w-60  bg-white/5
+                <aside className="w-60 h-screen bg-white/5
                          backdrop-blur-md
                          shadow-lg text-white border-r-2 border-[#1e2a52]">
                     <Sidebar />

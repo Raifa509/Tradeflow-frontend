@@ -24,4 +24,20 @@ export const ENDPOINTS = {
         create: '/inventory',
         update: (id: number) => `/inventory/${id}`,
     },
+    purchases: {
+        get: '/purchases',
+        getOne: (id: number) => `/purchases/${id}`,
+        create: '/purchases',
+        updateStatus: (id: number) => `/purchases/${id}/status`,
+        delete: (id: number) => `/purchases/${id}`,
+    },
+    sales: {
+        get: '/sales',
+        getOne: (id: number) => `/sales/${id}`,
+        create: '/sales',
+        updateStatus: (id: number) => `/sales/${id}/status`,
+        delete: (id: number) => `/sales/${id}`,
+    },
+
+
 }

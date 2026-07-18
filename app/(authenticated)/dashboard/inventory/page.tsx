@@ -279,12 +279,10 @@ export default function InventoryPage() {
                   disabled={submitting}
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="w-full border border-black/20 rounded-md px-3 py-3 text-sm"
+                  className="w-full border border-black/20 rounded-md px-3 py-3 text-sm bg-white text-black dark:bg-zinc-900 dark:text-white"
                 >
-                  {Array.from(new Set(products.map(p => p.category))).map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                 
+                  <option value="Electronics">Electronics</option>
+                  <option value="Appliances">Appliances</option>
                 </select>
               </div>
             </div>

@@ -1,6 +1,5 @@
 'use client';
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Plus, Eye, Minus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,17 +8,54 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
-import { CalendarIcon } from 'lucide-react';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { createPurchase, getAllPurchases, updatePurchaseStatus } from '@/lib/services/purchaseService';
+import { getAllSuppliers } from '@/lib/services/suppliersService';
+import { getAllProducts } from '@/lib/services/inventoryService';
 
-const dummyPurchases = [
-  { id: 1, refNumber: 'PUR-2026-001', supplier: 'Omar Al Farsi', company: 'TechSupply FZCO', total: 22490, status: 'DELIVERED', notes: 'Monthly electronics restock', createdAt: '2026-01-10', items: [{ product: 'Samsung 55" Smart TV', quantity: 5, price: 1700 }, { product: 'iPhone 15 Pro', quantity: 3, price: 3900 }] },
-  { id: 2, refNumber: 'PUR-2026-002', supplier: 'Rania Mahmoud', company: 'Gulf Import Trading', total: 18990, status: 'CONFIRMED', notes: 'Appliances restock Q1', createdAt: '2026-02-05', items: [{ product: 'LG Washing Machine 8kg', quantity: 5, price: 1300 }] },
-  { id: 3, refNumber: 'PUR-2026-003', supplier: 'Tariq Al Blooshi', company: 'Al Blooshi Wholesale', total: 9990, status: 'PENDING', notes: '', createdAt: '2026-03-15', items: [{ product: 'Sony PlayStation 5', quantity: 3, price: 1999 }] },
-];
 
-type Purchase = typeof dummyPurchases[0];
+type Status = 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED';
+
+type Supplier = {
+  id: number;
+  refNumber: string;
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  address: string;
+  isActive: boolean;
+};
+
+type Product = {
+  id: number;
+  refNumber: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  price: number;
+  category: string;
+};
+
+type PurchaseOrderItem = {
+  id: number;
+  productId: number;
+  product: Product;
+  quantity: number;
+  price: number;
+};
+
+type PurchaseOrder = {
+  id: number;
+  refNumber: string;
+  supplierId: number;
+  supplier: Supplier;
+  status: Status;
+  total: number;
+  notes: string | null;
+  reason: string | null;
+  createdAt: string;
+  items: PurchaseOrderItem[];
+};
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-yellow-500/20 text-yellow-400',
@@ -28,30 +64,55 @@ const statusColors: Record<string, string> = {
   CANCELLED: 'bg-red-500/20 text-red-400',
 };
 
+type FormItem = { productId: number | ''; quantity: number; price: number };
+
 export default function PurchasesPage() {
-  const [purchases, setPurchases] = useState(dummyPurchases);
+  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
+
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'CONFIRMED' | 'DELIVERED' | 'CANCELLED'>('ALL');
-  const [viewingPurchase, setViewingPurchase] = useState<Purchase | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | Status>('ALL');
+  const [viewingPurchase, setViewingPurchase] = useState<PurchaseOrder | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [form, setForm] = useState({
-    supplier: '',
-    company: '',
-    notes: '',
-    items: [{ product: '', quantity: 1, price: 0 }], // Starts with one clean initial line item
-    date: new Date(),
-  });
+  const emptyForm = { supplierId: '' as number | '', notes: '', items: [{ productId: '', quantity: 1, price: 0 }] as FormItem[] };
+  const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [purchasesData, suppliersData, productsData] = await Promise.all([
+          getAllPurchases(),
+          getAllSuppliers(),
+          getAllProducts(),
+        ]);
+        setPurchases(purchasesData);
+        setSuppliers(suppliersData.filter((s: Supplier) => s.isActive));
+        setProducts(productsData);
+      } catch (err) {
+        setLoadError('Failed to load purchases. Please refresh the page.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
   const filtered = purchases.filter(p => {
     const matchesSearch =
-      p.supplier.toLowerCase().includes(search.toLowerCase()) ||
-      p.company.toLowerCase().includes(search.toLowerCase()) ||
+      p.supplier.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.supplier.company.toLowerCase().includes(search.toLowerCase()) ||
       p.refNumber.toLowerCase().includes(search.toLowerCase());
 
     const matchesStatus = statusFilter === 'ALL' ? true : p.status === statusFilter;
@@ -59,29 +120,37 @@ export default function PurchasesPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleView = (purchase: Purchase) => {
+  const handleView = (purchase: PurchaseOrder) => {
     setViewingPurchase(purchase);
     setIsViewOpen(true);
   };
 
-  const handleStatusChange = (id: number, newStatus: string) => {
-    setPurchases(prev => prev.map(p => p.id === id ? { ...p, status: newStatus } : p));
-    if (viewingPurchase?.id === id) {
-      setViewingPurchase(v => v ? { ...v, status: newStatus } : null);
+  const handleStatusChange = async (id: number, newStatus: Status) => {
+    setActionError('');
+    try {
+      const updated = await updatePurchaseStatus(id, newStatus);
+      setPurchases(prev => prev.map(p => (p.id === id ? updated : p)));
+      if (viewingPurchase?.id === id) setViewingPurchase(updated);
+    } catch (err) {
+      setActionError('Failed to update the order status. Please try again.');
     }
   };
 
   const addItem = () => {
-    setForm(prev => ({ ...prev, items: [...prev.items, { product: '', quantity: 1, price: 0 }] }));
+    setForm(prev => ({ ...prev, items: [...prev.items, { productId: '', quantity: 1, price: 0 }] }));
   };
 
-  const updateItem = (index: number, field: string, value: string | number) => {
+  const updateItem = (index: number, field: 'productId' | 'quantity' | 'price', value: string) => {
     setForm(prev => ({
       ...prev,
-      items: prev.items.map((item, i) => i === index ? { 
-        ...item, 
-        [field]: field === 'product' ? value : Math.max(0, Number(value)) 
-      } : item)
+      items: prev.items.map((item, i) => {
+        if (i !== index) return item;
+        if (field === 'productId') {
+          const product = products.find(p => p.id === Number(value));
+          return { ...item, productId: value ? Number(value) : '', price: product ? product.price : item.price };
+        }
+        return { ...item, [field]: Math.max(0, Number(value)) };
+      }),
     }));
   };
 
@@ -95,57 +164,78 @@ export default function PurchasesPage() {
     setIsCancelOpen(true);
   };
 
-  const handleCancelConfirm = () => {
+  const handleCancelConfirm = async () => {
     if (!cancelReason.trim()) {
       setCancelError('Please enter a reason for cancellation.');
       return;
     }
+    if (!viewingPurchase) return;
 
-    if (viewingPurchase) {
-      const updatedNotes = `Cancelled: ${cancelReason}${viewingPurchase.notes ? ` | ${viewingPurchase.notes}` : ''}`;
-
-      setPurchases(prev => prev.map(p =>
-        p.id === viewingPurchase.id ? { ...p, status: 'CANCELLED', notes: updatedNotes } : p
-      ));
-      setViewingPurchase(v => v ? { ...v, status: 'CANCELLED', notes: updatedNotes } : null);
+    setIsCancelling(true);
+    setCancelError('');
+    try {
+      const updated = await updatePurchaseStatus(viewingPurchase.id, 'CANCELLED', cancelReason);
+      setPurchases(prev => prev.map(p => (p.id === viewingPurchase.id ? updated : p)));
+      setViewingPurchase(updated);
+      setIsCancelOpen(false);
+      setIsViewOpen(false);
+    } catch (err) {
+      setCancelError('Failed to cancel the order. Please try again.');
+    } finally {
+      setIsCancelling(false);
     }
-
-    setIsCancelOpen(false);
-    setIsViewOpen(false);
   };
 
   const formTotal = form.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
 
-  const handleAddSubmit = () => {
-    if (!form.supplier || !form.company) {
-      setError('Supplier and company are required');
+  const handleAddSubmit = async () => {
+    if (!form.supplierId) {
+      setError('Please select a supplier');
       return;
     }
-    
-    const validItems = form.items.filter(i => i.product.trim());
+
+    const validItems = form.items.filter(i => i.productId !== '');
     if (validItems.length === 0) {
-      setError('Please add at least one item with a valid product name.');
+      setError('Please add at least one item with a product selected.');
       return;
     }
 
-    setPurchases(prev => [{
-      id: prev.length + 1,
-      refNumber: `PUR-2026-${String(prev.length + 1).padStart(3, '0')}`,
-      supplier: form.supplier,
-      company: form.company,
-      total: formTotal,
-      status: 'PENDING',
-      notes: form.notes,
-      createdAt: format(form.date, 'yyyy-MM-dd'),
-      items: validItems,
-    }, ...prev]);
-
-    setIsAddOpen(false);
-    setForm({ supplier: '', company: '', notes: '', items: [{ product: '', quantity: 1, price: 0 }], date: new Date() });
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const created = await createPurchase({
+        supplierId: Number(form.supplierId),
+        notes: form.notes || undefined,
+        items: validItems.map(i => ({
+          productId: Number(i.productId),
+          quantity: i.quantity,
+          price: i.price,
+        })),
+      });
+      setPurchases(prev => [created, ...prev]);
+      setIsAddOpen(false);
+      setForm(emptyForm);
+    } catch (err) {
+      setError('Failed to create the purchase order. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (isLoading) {
+    return <div className="text-gray-400 py-20 text-center">Loading purchases...</div>;
+  }
+
+  if (loadError) {
+    return <div className="text-red-400 py-20 text-center">{loadError}</div>;
+  }
 
   return (
     <div>
+      {actionError && (
+        <p className="text-red-400 text-sm bg-red-500/10 px-3 py-2 rounded-lg mb-4">{actionError}</p>
+      )}
+
       {/* Top Bar */}
       <div className="flex items-center justify-between">
         <div className="relative">
@@ -159,7 +249,7 @@ export default function PurchasesPage() {
         </div>
         <Button
           onClick={() => {
-            setForm({ supplier: '', company: '', notes: '', items: [{ product: '', quantity: 1, price: 0 }], date: new Date() });
+            setForm(emptyForm);
             setError('');
             setIsAddOpen(true);
           }}
@@ -217,15 +307,15 @@ export default function PurchasesPage() {
                   <TableCell className="text-blue-400 font-mono text-sm py-3">
                     {purchase.refNumber}
                   </TableCell>
-                  <TableCell className="text-white font-medium">{purchase.supplier}</TableCell>
-                  <TableCell className="text-gray-300">{purchase.company}</TableCell>
+                  <TableCell className="text-white font-medium">{purchase.supplier.name}</TableCell>
+                  <TableCell className="text-gray-300">{purchase.supplier.company}</TableCell>
                   <TableCell className="text-gray-300">AED {purchase.total.toLocaleString()}</TableCell>
                   <TableCell>
                     <Badge className={`${statusColors[purchase.status]} border-0`}>
                       {purchase.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-gray-300">{purchase.createdAt}</TableCell>
+                  <TableCell className="text-gray-300">{format(new Date(purchase.createdAt), 'yyyy-MM-dd')}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       {purchase.status === 'PENDING' && (
@@ -271,7 +361,7 @@ export default function PurchasesPage() {
         </Table>
       </div>
 
-      {/* ── Cancel Purchase Confirmation Modal (Single Global Instance) ── */}
+      {/* Cancel Purchase Confirmation Modal */}
       <Dialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
         <DialogContent className="sm:max-w-md px-8 py-6">
           <DialogHeader>
@@ -301,15 +391,17 @@ export default function PurchasesPage() {
               <Button
                 variant="ghost"
                 onClick={() => setIsCancelOpen(false)}
+                disabled={isCancelling}
                 className="cursor-pointer px-5 py-5 text-gray-500 hover:bg-gray-100"
               >
                 Go Back
               </Button>
               <Button
                 onClick={handleCancelConfirm}
+                disabled={isCancelling}
                 className="bg-red-600 cursor-pointer px-5 py-5 rounded-xl hover:bg-red-700 text-white"
               >
-                Confirm Cancel
+                {isCancelling ? 'Cancelling...' : 'Confirm Cancel'}
               </Button>
             </div>
           </div>
@@ -330,11 +422,11 @@ export default function PurchasesPage() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-gray-400">Supplier</p>
-                  <p className="text-black font-medium">{viewingPurchase.supplier}</p>
+                  <p className="text-black font-medium">{viewingPurchase.supplier.name}</p>
                 </div>
                 <div>
                   <p className="text-gray-400">Company</p>
-                  <p className="text-black">{viewingPurchase.company}</p>
+                  <p className="text-black">{viewingPurchase.supplier.company}</p>
                 </div>
                 <div>
                   <p className="text-gray-400">Status</p>
@@ -344,12 +436,18 @@ export default function PurchasesPage() {
                 </div>
                 <div>
                   <p className="text-gray-400">Date</p>
-                  <p className="text-black">{viewingPurchase.createdAt}</p>
+                  <p className="text-black">{format(new Date(viewingPurchase.createdAt), 'yyyy-MM-dd')}</p>
                 </div>
                 {viewingPurchase.notes && (
                   <div className="col-span-2">
                     <p className="text-gray-400">Notes</p>
                     <p className="text-black bg-gray-50 p-2.5 rounded-lg border border-black/5">{viewingPurchase.notes}</p>
+                  </div>
+                )}
+                {viewingPurchase.status === 'CANCELLED' && viewingPurchase.reason && (
+                  <div className="col-span-2">
+                    <p className="text-gray-400">Cancellation Reason</p>
+                    <p className="text-black bg-red-50 p-2.5 rounded-lg border border-red-100">{viewingPurchase.reason}</p>
                   </div>
                 )}
               </div>
@@ -367,9 +465,9 @@ export default function PurchasesPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {viewingPurchase.items.map((item, i) => (
-                        <tr key={i} className="border-t border-black/10">
-                          <td className="px-4 py-2 text-black">{item.product}</td>
+                      {viewingPurchase.items.map((item) => (
+                        <tr key={item.id} className="border-t border-black/10">
+                          <td className="px-4 py-2 text-black">{item.product.name}</td>
                           <td className="px-4 py-2 text-black">{item.quantity}</td>
                           <td className="px-4 py-2 text-black">AED {item.price.toLocaleString()}</td>
                           <td className="px-4 py-2 text-black">AED {(item.price * item.quantity).toLocaleString()}</td>
@@ -382,7 +480,6 @@ export default function PurchasesPage() {
             </div>
           )}
 
-          {/* Fixed Footer with View-to-Cancel Actions Linked */}
           {viewingPurchase && (
             <div className="flex items-center justify-between border-t border-black/10 px-8 py-4 bg-gray-50/50 flex-shrink-0">
               {(viewingPurchase.status === 'PENDING' || viewingPurchase.status === 'CONFIRMED') && (
@@ -418,41 +515,17 @@ export default function PurchasesPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Supplier Name <span className="text-red-600">*</span></Label>
-                <Input
-                  value={form.supplier}
-                  onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                  className="border border-black/20 py-5 text-black"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Company <span className="text-red-600">*</span></Label>
-                <Input
-                  value={form.company}
-                  onChange={(e) => setForm({ ...form, company: e.target.value })}
-                  className="border border-black/20 py-5 text-black"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Purchase Date <span className="text-red-600">*</span></Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="w-full flex items-center gap-2 border border-black/20 rounded-lg px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition cursor-pointer text-black bg-white">
-                      <CalendarIcon size={15} className="text-gray-400" />
-                      {form.date ? format(form.date, 'dd MMM yyyy') : 'Pick a date'}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={form.date}
-                      onSelect={(date) => date && setForm({ ...form, date })}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Label>Supplier <span className="text-red-600">*</span></Label>
+                <select
+                  value={form.supplierId}
+                  onChange={(e) => setForm({ ...form, supplierId: e.target.value ? Number(e.target.value) : '' })}
+                  className="w-full border border-black/20 rounded-lg px-3 py-2.5 text-sm text-black bg-white"
+                >
+                  <option value="">Select a supplier</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} — {s.company}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
@@ -476,62 +549,60 @@ export default function PurchasesPage() {
                 </button>
               </div>
 
-              {form.items.length === 0 ? (
-                <div className="text-center py-10 border border-dashed border-black/20 rounded-xl text-gray-400 text-sm">
-                  No items added yet. Click "Add Line" to start.
+              <div className="space-y-2">
+                <div className="grid grid-cols-[1fr_80px_100px_90px_32px] gap-2 text-xs text-gray-400 px-1">
+                  <span>Product</span>
+                  <span>Qty</span>
+                  <span>Price (AED)</span>
+                  <span className="text-right">Total</span>
+                  <span />
                 </div>
-              ) : (
+
                 <div className="space-y-2">
-                  <div className="grid grid-cols-[1fr_80px_100px_90px_32px] gap-2 text-xs text-gray-400 px-1">
-                    <span>Product</span>
-                    <span>Qty</span>
-                    <span>Price (AED)</span>
-                    <span className="text-right">Total</span>
-                    <span />
-                  </div>
+                  {form.items.map((item, idx) => (
+                    <div key={idx} className="grid grid-cols-[1fr_80px_100px_90px_32px] gap-2 items-center">
+                      <select
+                        value={item.productId}
+                        onChange={(e) => updateItem(idx, 'productId', e.target.value)}
+                        className="w-full border border-black/20 rounded-lg px-2 py-2.5 text-sm text-black bg-white"
+                      >
+                        <option value="">Select a product</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                        ))}
+                      </select>
 
-                  <div className="space-y-2">
-                    {form.items.map((item, idx) => (
-                      <div key={idx} className="grid grid-cols-[1fr_80px_100px_90px_32px] gap-2 items-center">
-                        <Input
-                          value={item.product}
-                          onChange={(e) => updateItem(idx, "product", e.target.value)}
-                          placeholder="Product name"
-                          className="border border-black/20 py-4 text-sm text-black"
-                        />
+                      <Input
+                        type="number"
+                        min={1}
+                        value={item.quantity}
+                        onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                        className="border border-black/20 py-4 text-sm text-center text-black"
+                      />
 
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => updateItem(idx, "quantity", e.target.value)}
-                          className="border border-black/20 py-4 text-sm text-center text-black"
-                        />
+                      <Input
+                        type="number"
+                        min={0}
+                        value={item.price}
+                        onChange={(e) => updateItem(idx, 'price', e.target.value)}
+                        className="border border-black/20 py-4 text-sm text-black"
+                      />
 
-                        <Input
-                          type="number"
-                          min={0}
-                          value={item.price}
-                          onChange={(e) => updateItem(idx, "price", e.target.value)}
-                          className="border border-black/20 py-4 text-sm text-black"
-                        />
+                      <p className="text-sm text-right text-gray-600 font-medium pr-1">
+                        {(item.quantity * item.price).toLocaleString()}
+                      </p>
 
-                        <p className="text-sm text-right text-gray-600 font-medium pr-1">
-                          {(item.quantity * item.price).toLocaleString()}
-                        </p>
-
-                        <button
-                          onClick={() => removeItem(idx)}
-                          disabled={form.items.length === 1}
-                          className="text-red-500 ps-3 hover:text-red-400 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                        >
-                          <Minus size={20} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                      <button
+                        onClick={() => removeItem(idx)}
+                        disabled={form.items.length === 1}
+                        className="text-red-500 ps-3 hover:text-red-400 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <Minus size={20} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -547,6 +618,7 @@ export default function PurchasesPage() {
               <Button
                 variant="ghost"
                 onClick={() => setIsAddOpen(false)}
+                disabled={isSubmitting}
                 className="cursor-pointer px-5 py-5 text-gray-500"
               >
                 Cancel
@@ -554,9 +626,10 @@ export default function PurchasesPage() {
 
               <Button
                 onClick={handleAddSubmit}
+                disabled={isSubmitting}
                 className="bg-blue-600 cursor-pointer px-5 py-5 rounded-xl hover:bg-blue-700 text-white"
               >
-                Create Order
+                {isSubmitting ? 'Creating...' : 'Create Order'}
               </Button>
             </div>
           </div>
