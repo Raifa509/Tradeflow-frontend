@@ -136,7 +136,7 @@ export default function SuppliersPage() {
     try {
       setCanceling(true);
       setCancelError('');
-      await deleteSupplier(supplierToDeactivate.id, cancelReason);
+      await deleteSupplier(supplierToDeactivate.id);
       setSuppliers(prev => prev.map(s =>
         s.id === supplierToDeactivate.id ? { ...s, isActive: false, reason: cancelReason } : s
       ));
@@ -265,8 +265,8 @@ export default function SuppliersPage() {
                       </DropdownMenu>
                     ) : (
                       <Sheet>
-                        <SheetTrigger asChild>
-                          <Button variant="link" className="text-white text-xs cursor-pointer">View</Button>
+                        <SheetTrigger className="text-white text-xs cursor-pointer hover:underline bg-transparent border-0 p-0">
+                        View
                         </SheetTrigger>
                         <SheetContent className="bg-gray-300">
                           <SheetHeader className="p-6">

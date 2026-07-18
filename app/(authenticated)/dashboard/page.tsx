@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import api from '@/lib/api';
 
 const statusColors: Record<string, string> = {
-  PENDING:   'bg-yellow-500/20 text-yellow-400',
+  PENDING: 'bg-yellow-500/20 text-yellow-400',
   CONFIRMED: 'bg-blue-500/20 text-blue-400',
   DELIVERED: 'bg-green-500/20 text-green-400',
   CANCELLED: 'bg-red-500/20 text-red-400',
@@ -114,7 +114,7 @@ export default function DashboardPage() {
             <AreaChart data={stats?.salesChart || []}>
               <defs>
                 <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.3} />
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                 </linearGradient>
               </defs>
@@ -123,7 +123,7 @@ export default function DashboardPage() {
               <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#0d1b3e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
-                formatter={(value: number) => [`AED ${value.toLocaleString()}`, 'Sales']}
+                formatter={(value: any) => [`AED ${Number(value || 0).toLocaleString()}`, 'Sales']}
               />
               <Area type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={2} fill="url(#salesGradient)" />
             </AreaChart>
