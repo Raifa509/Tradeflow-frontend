@@ -47,9 +47,9 @@ function CustomersPage() {
   useEffect(() => {
     const user = getStoredUser();
     if (user) {
-      setUserRole(user.role); 
+      setUserRole(user.role);
     }
-    
+
     fetchCustomers();
   }, []);
 
@@ -274,8 +274,8 @@ function CustomersPage() {
                       </DropdownMenu>
                     ) : (
                       <Sheet>
-                        <SheetTrigger asChild>
-                          <Button variant="link" className="text-white text-xs cursor-pointer">View</Button>
+                        <SheetTrigger className="text-white text-xs cursor-pointer hover:underline bg-transparent border-0 p-0">
+                          View
                         </SheetTrigger>
                         <SheetContent className="bg-gray-300">
                           <SheetHeader className="p-6">
@@ -290,7 +290,7 @@ function CustomersPage() {
                               { label: 'Email', value: customer.email },
                               { label: 'Phone', value: customer.phone },
                               { label: 'Address', value: customer.address },
-                              {label:"Reason",value:customer.reason}
+                              { label: "Reason", value: customer.reason }
                             ].map(({ label, value }) => (
                               <div key={label} className="space-y-1">
                                 <p className="text-sm text-muted-foreground">{label}</p>
